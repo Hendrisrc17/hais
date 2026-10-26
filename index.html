@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KelasKita | Portal Kuis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+  <link rel="stylesheet" href="css/layout-fixes.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="#">Kelas<span>Kita</span></a><nav><button data-view="home">Kuis</button><button data-view="results">Rekap</button><button data-view="admin" id="adminNav" hidden>Admin</button></nav><div id="userArea"></div></header>
+  <main id="app"><div class="loading">Mencari data...</div></main>
+  <div id="toast" class="toast"></div>
+  <dialog id="identityDialog"><form method="post" id="identityForm"><span class="eyebrow">IDENTITAS SISWA</span><h2>Siap mulai?</h2><p>Nama dan kelas dipakai untuk rekap guru.</p><label>Nama lengkap<input id="studentName" required minlength="2" maxlength="80" autocomplete="name"></label><label>Kelas<input id="studentClass" required maxlength="30" placeholder="Contoh: IX A"></label><div class="dialog-actions"><button type="button" class="button ghost" data-close-dialog="identityDialog">Batal</button><button type="submit" class="button primary">Mulai kuis</button></div></form></dialog>
+  <dialog id="adminDialog"><form method="post" id="adminForm"><span class="eyebrow">AREA ADMIN</span><h2>Masuk admin</h2><p>Gunakan akun Firebase Authentication.</p><label>Email<input id="adminEmail" type="email" required></label><label>Password<input id="adminPassword" type="password" required minlength="6"></label><div id="adminError" class="error"></div><div class="dialog-actions"><button type="button" class="button ghost" data-close-dialog="adminDialog">Batal</button><button type="submit" id="adminSubmit" class="button primary">Masuk</button></div></form></dialog>
+  <script>
+    if (location.protocol === 'file:') {
+      document.querySelector('#app').innerHTML = '<section class="card error-state"><span class="eyebrow">MODE FILE</span><h2>Aplikasi perlu dibuka lewat server lokal</h2><p>Jangan buka index.html langsung dari folder. Browser memblokir Firebase pada alamat file://.</p><p>Buka file <b>buka-kelas-kita.bat</b> di folder project, lalu buka alamat yang tampil.</p></section>';
+    }
+  </script>
+  <script>
+    if (location.protocol !== 'file:') {
+      const script = document.createElement('script');
+      script.type = 'module';
+      script.src = 'js/backend.js';
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html>

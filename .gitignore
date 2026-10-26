@@ -1,0 +1,5 @@
+.env
+.env.*
+!.env.example
+firebase-adminsdk-*.json
+node_modules/

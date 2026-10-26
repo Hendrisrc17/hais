@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true);
+    }
+
+    match /quizzes/{quizId} {
+      // Public query must contain where("published", "==", true).
+      allow read: if (resource.data.published == true) || admin();
+      allow write: if admin();
+      match /questions/{questionId} {
+        allow read: if get(/databases/$(database)/documents/quizzes/$(quizId)).data.published == true || admin();
+        allow write: if admin();
+      }
+    }
+
+    match /submissions/{submissionId} {
+      allow create: if request.resource.data.studentName is string
+        && request.resource.data.studentClass is string
+        && request.resource.data.quizId is string;
+      allow read, delete: if admin();
+      allow update: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if admin() || (signedIn() && request.auth.uid == userId);
+      allow write: if admin();
+    }
+    match /settings/{document=**} { allow read: if true; allow write: if admin(); }
+  }
+}
