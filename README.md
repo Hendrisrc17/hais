@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # KelasKita
 
 Portal kuis static untuk GitHub Pages. Tidak memakai Node. Firebase Web SDK dimuat dari CDN.
@@ -54,3 +55,6 @@ Upload `index.html`, `css/`, `js/`, dan `firestore.rules` ke repository GitHub P
 ## Batasan tanpa backend
 
 Firebase client + Firestore Rules cocok untuk portal static, tetapi tidak dapat memberi validasi server kompleks seperti transaction reservasi retake, hitung nilai rahasia, atau proteksi kunci jawaban. Untuk keamanan penuh, perlu Cloud Functions/Cloud Run. Jangan menaruh `FIREBASE_PRIVATE_KEY` di GitHub Pages.
+=======
+# hais
+>>>>>>> 36635e5ed221dff88320d2bb5319483aa08dab21
