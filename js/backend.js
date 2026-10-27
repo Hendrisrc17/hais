@@ -23,7 +23,7 @@ const normalizedOptionPoints = (option, correct) => correct && optionPoints(opti
 const isCorrectOption = option => option?.isCorrect === true || option?.correct === true;
 const questionMaxPoints = question => { const options = question.options || []; if (question.type === 'allCorrect') return options.filter(isCorrectOption).reduce((sum, option) => sum + normalizedOptionPoints(option, true), 0); return Math.max(0, ...options.filter(isCorrectOption).map(option => normalizedOptionPoints(option, true))); };
 const toast = message => { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); };
-const state = { user: null, isAdmin: false, quizzes: [], questions: [], submissions: [], currentQuiz: null, search: '' };
+const state = { user: null, isAdmin: false, quizzes: [], questions: [], submissions: [], realtimeSubmissions: null, realtimeQuizzes: null, currentQuiz: null, search: '' };
 
 const savedTheme = localStorage.getItem('kelaskita-theme');
 if (savedTheme === 'dark') document.documentElement.dataset.theme = 'dark';
@@ -185,16 +185,14 @@ async function removeQuiz(id) { if (!confirm('Hapus kuis ini? Jika sudah punya s
 
 async function renderSubmissions(subject = '') { const snapshot = await getDocs(collection(db, 'submissions')); const quizzes = await adminData(); const quizPoints = new Map(); for (const quiz of quizzes) { let total = Number(quiz.totalPoints || 0); if (!total) { const questions = (await getDocs(collection(db, `quizzes/${quiz.id}/questions`))).docs.map(item => item.data()); total = questions.reduce((sum, question) => sum + questionMaxPoints(question), 0); } quizPoints.set(quiz.id, total); } state.submissions = snapshot.docs.map(item => { const data = item.data(); const total = Number(data.total || data.maxScore || quizPoints.get(data.quizId) || 0); const score = Number(data.score ?? data.totalScore ?? 0); return { id: item.id, ...data, score, total, correct: Number(data.correct ?? data.correctCount ?? 0), wrong: Number(data.wrong ?? data.wrongCount ?? 0), unanswered: Number(data.unanswered ?? data.unansweredCount ?? Math.max(0, Number(data.totalQuestions || 0) - Number(data.correct ?? data.correctCount ?? 0) - Number(data.wrong ?? data.wrongCount ?? 0))) }; }).filter(item => !subject || item.subject === subject); adminShell(subject ? `Hasil ${subject}` : 'Rekap submission', `<div class="toolbar"><input class="search" id="submissionSearch" placeholder="Cari nama, mapel, atau kuis..."><button class="button secondary" id="downloadCsv">Download CSV</button><button class="button secondary" id="downloadExcel">Export Excel</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Kuis</th><th>Nilai</th><th>Benar</th><th>Salah</th><th>Kosong</th><th>Aksi</th></tr></thead><tbody id="submissionRows"></tbody></table></div>`); const draw = () => { const text = $('#submissionSearch').value.toLowerCase(); const rows = state.submissions.filter(item => [item.studentName, item.subject, item.quizTitle].join(' ').toLowerCase().includes(text)); $('#submissionRows').innerHTML = rows.map(item => `<tr><td>${esc(item.studentName)}</td><td>${esc(item.studentClass)}</td><td>${esc(item.subject)}</td><td>${esc(item.quizTitle)}</td><td>${item.score}/${item.total}</td><td>${item.correct}</td><td>${item.wrong}</td><td>${item.unanswered}</td><td><button class="button danger small" data-submission-delete="${item.id}">Hapus</button></td></tr>`).join('') || '<tr><td colspan="9">Belum ada hasil.</td></tr>'; $$('#submissionRows [data-submission-delete]').forEach(button => button.onclick = () => deleteSubmission(button.dataset.submissionDelete)); }; draw(); $('#submissionSearch').oninput = draw; $('#downloadCsv').onclick = () => downloadCSV(state.submissions, subject); $('#downloadExcel').onclick = () => downloadExcel(state.submissions); }
 async function renderSubmissionsFast(subject = '') {
-  const [snapshot, quizzes] = await withTimeout(Promise.all([
-    getDocs(collection(db, 'submissions')),
-    getDocs(collection(db, 'quizzes'))
-  ]));
-  const quizPoints = new Map(quizzes.docs.map(item => [item.id, Number(item.data().totalPoints || 0)]));
-  state.submissions = snapshot.docs.map(item => {
-    const data = item.data();
+  const submissions = state.realtimeSubmissions || (await withTimeout(getDocs(collection(db, 'submissions')))).docs.map(item => ({ id: item.id, ...item.data() }));
+  const quizzes = state.realtimeQuizzes || (await withTimeout(getDocs(collection(db, 'quizzes')))).docs.map(item => ({ id: item.id, ...item.data() }));
+  const quizPoints = new Map(quizzes.map(item => [item.id, Number(item.totalPoints || 0)]));
+  state.submissions = submissions.map(item => {
+    const data = item;
     const total = Number(data.total || data.maxScore || quizPoints.get(data.quizId) || 0);
     return {
-      id: item.id,
+      id: data.id,
       ...data,
       total,
       score: Number(data.score ?? data.totalScore ?? 0),
@@ -225,6 +223,7 @@ async function renderSubjects() { const quizzes = await adminData(); const subje
 async function renderSettings() { const snapshot = await getDoc(doc(db, 'settings', 'general')); const settings = { appName: 'KelasKita', schoolName: '', logoUrl: '', classes: [], subjects: [], retakeDefault: false, showScoreDefault: true, ...(snapshot.exists() ? snapshot.data() : {}) }; adminShell('Pengaturan aplikasi', `<form id="settingsForm" class="card form-card"><div class="form-grid"><label>Nama aplikasi<input name="appName" value="${esc(settings.appName)}"></label><label>Nama sekolah<input name="schoolName" value="${esc(settings.schoolName)}"></label><label>URL logo<input name="logoUrl" value="${esc(settings.logoUrl)}"></label><label>Daftar kelas, pisahkan koma<input name="classes" value="${esc((settings.classes || []).join(', '))}"></label><label>Daftar mata pelajaran, pisahkan koma<input name="subjects" value="${esc((settings.subjects || []).join(', '))}"></label></div><div class="check-grid"><label><input name="retakeDefault" type="checkbox" ${settings.retakeDefault ? 'checked' : ''}> Retake default</label><label><input name="showScoreDefault" type="checkbox" ${settings.showScoreDefault ? 'checked' : ''}> Tampilkan nilai default</label></div><button class="button primary">Simpan pengaturan</button></form>`); $('#settingsForm').onsubmit = async event => { event.preventDefault(); const form = new FormData(event.target); await setDoc(doc(db, 'settings', 'general'), { appName: form.get('appName'), schoolName: form.get('schoolName'), logoUrl: form.get('logoUrl'), classes: clean(form.get('classes')).split(',').map(clean).filter(Boolean), subjects: clean(form.get('subjects')).split(',').map(clean).filter(Boolean), retakeDefault: form.get('retakeDefault') === 'on', showScoreDefault: form.get('showScoreDefault') === 'on', updatedAt: serverTimestamp() }); toast('Pengaturan disimpan.'); }; }
 
 let adminLoading = false;
+let adminRequestId = 0;
 const adminLoadingLabel = page => `Memuat ${page === 'submissions' ? 'hasil' : page === 'dashboard' ? 'dashboard' : page} admin...`;
 let adminRealtimeStarted = false;
 let adminRefreshTimer = null;
@@ -242,12 +241,13 @@ function startAdminRealtime() {
       if (stateAdmin.page === 'quizzes' && $('#adminQuizGrid')) renderQuizList();
     }, 150);
   };
-  onSnapshot(collection(db, 'quizzes'), refresh, error => toast(errorMessage(error)));
-  onSnapshot(collection(db, 'submissions'), refresh, error => toast(errorMessage(error)));
+  onSnapshot(collection(db, 'quizzes'), snapshot => { state.realtimeQuizzes = snapshot.docs.map(item => ({ id: item.id, ...item.data() })); refresh(); }, error => toast(errorMessage(error)));
+  onSnapshot(collection(db, 'submissions'), snapshot => { state.realtimeSubmissions = snapshot.docs.map(item => ({ id: item.id, ...item.data() })); refresh(); }, error => toast(errorMessage(error)));
   onSnapshot(doc(db, 'settings', 'general'), refresh, error => toast(errorMessage(error)));
 }
 async function openAdmin(page) { if (!state.user) return $('#adminDialog').showModal(); if (!state.isAdmin) { const profile = state.adminProfile || {}; showError('Akses admin ditolak', `UID login: ${state.user.uid}\nDokumen users/${state.user.uid}: ${profile.exists ? 'ada' : 'tidak ada'}\nRole: ${profile.data?.role || '-'}\nactive: ${String(profile.data?.active)}\nisActive: ${String(profile.data?.isActive)}\n\nBuat atau perbaiki dokumen users/${state.user.uid}.`); return; } if (adminLoading) return; adminLoading = true; try { loading('Memuat dashboard admin...'); if (page === 'dashboard') await firestoreRequest(() => renderDashboard()); if (page === 'quizzes') await firestoreRequest(() => renderQuizList()); if (page === 'submissions') await firestoreRequest(() => renderSubmissions()); if (page === 'subjects') await firestoreRequest(() => renderSubjects()); if (page === 'settings') await firestoreRequest(() => renderSettings()); } catch (error) { showError('CRUD admin gagal', `${errorMessage(error)}\n\nUID login: ${state.user.uid}\n\nCoba refresh halaman sekali.`); } finally { adminLoading = false; } }
 $('#adminForm').onsubmit = async event => { event.preventDefault(); const email = clean($('#adminEmail').value); const password = $('#adminPassword').value; const button = $('#adminSubmit'); $('#adminError').textContent = ''; if (!email || !password) { $('#adminError').textContent = 'Email dan password wajib diisi.'; return; } button.disabled = true; button.textContent = 'Memeriksa...'; try { await signInWithEmailAndPassword(auth, email, password); $('#adminDialog').close(); } catch (error) { $('#adminError').textContent = errorMessage(error); } finally { button.disabled = false; button.textContent = 'Masuk'; } };
+openAdmin = async page => { stateAdmin.page = page; if (!state.user) return $('#adminDialog').showModal(); if (!state.isAdmin) return; adminLoading = true; loading(adminLoadingLabel(page)); try { if (page === 'submissions') await renderSubmissions(); else if (page === 'dashboard') await renderDashboard(); else if (page === 'quizzes') await renderQuizList(); else if (page === 'subjects') await renderSubjects(); else if (page === 'settings') await renderSettings(); } catch (error) { showError('CRUD admin gagal', errorMessage(error)); } finally { adminLoading = false; } };
 $$('[data-view]').forEach(button => button.onclick = () => { const page = button.dataset.view === 'results' ? 'submissions' : 'dashboard'; stateAdmin.page = page; if (button.dataset.view !== 'home') startAdminRealtime(); return button.dataset.view === 'home' ? renderHome() : openAdmin(page); });
 loading();
 const authReady = new Promise(resolve => onAuthStateChanged(auth, resolve));
