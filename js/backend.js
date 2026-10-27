@@ -29,8 +29,14 @@ const savedTheme = localStorage.getItem('kelaskita-theme');
 if (savedTheme === 'dark') document.documentElement.dataset.theme = 'dark';
 
 const submissionTableObserver = new MutationObserver(() => {
+  state.submissions.sort((a, b) => (dateValue(b.submittedAt)?.getTime() || 0) - (dateValue(a.submittedAt)?.getTime() || 0));
   const table = $('.table');
   if (!table || !$('tbody', table)) return;
+  const body = $('tbody', table);
+  state.submissions.forEach(item => {
+    const row = [...body.children].find(candidate => candidate.children[0]?.textContent === String(item.studentName || '') && candidate.children[3]?.textContent === String(item.quizTitle || ''));
+    if (row) body.append(row);
+  });
   const header = $('thead tr', table);
   if (header && !header.querySelector('[data-submission-date]')) {
     const dateHeader = document.createElement('th');
