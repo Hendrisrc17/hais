@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { initializeFirestore, getFirestore, collection, getDocs, getDoc, doc, addDoc, setDoc, deleteDoc, query, where, orderBy, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { initializeFirestore, getFirestore, collection, getDocs, getDoc, doc, addDoc, setDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = { apiKey: 'AIzaSyDexCS7t0BYdfqNniC9lFyffPm1tO7mjvQ', authDomain: 'website-sekoalah.firebaseapp.com', projectId: 'website-sekoalah', storageBucket: 'website-sekoalah.firebasestorage.app', messagingSenderId: '1093168697523', appId: '1:1093168697523:web:58cf059e271595850560c6' };
 const firebaseApp = initializeApp(firebaseConfig);
@@ -117,15 +117,14 @@ async function verifyAdmin(user) {
   return profile.exists() && data.role === 'admin' && (data.active === true || data.isActive === true);
 }
 
-async function loadPublicQuizzes() {
-  try {
-    loading('Memuat kuis publik...');
-    const snapshot = await withTimeout(getDocs(query(collection(db, 'quizzes'), where('published', '==', true))));
+let publicQuizUnsubscribe = null;
+function loadPublicQuizzes() {
+  loading('Memuat kuis publik...');
+  publicQuizUnsubscribe?.();
+  publicQuizUnsubscribe = onSnapshot(query(collection(db, 'quizzes'), where('published', '==', true)), snapshot => {
     state.quizzes = snapshot.docs.map(item => ({ id: item.id, ...item.data() })).filter(item => item.published === true || item.status === 'published');
     renderHome();
-  } catch (error) {
-    showError('Data kuis belum bisa dibaca', errorMessage(error));
-  }
+  }, error => showError('Data kuis belum bisa dibaca', errorMessage(error)));
 }
 
 function quizStatus(quiz) {
@@ -139,7 +138,10 @@ function quizStatus(quiz) {
 function renderHome() {
   $('#app').innerHTML = `<section class="hero"><div><span class="eyebrow">PORTAL KUIS SEKOLAH</span><h1>Belajar. Jawab.<br><em>Melangkah lebih jauh.</em></h1><p>Pilih kuis sesuai kelas dan mata pelajaran. Kerjakan dengan jujur, hasilmu tersimpan aman untuk guru.</p></div><div class="hero-note"><span class="eyebrow">TOTAL KUIS AKTIF</span><strong>${state.quizzes.length}</strong><span>kuis tersedia sekarang</span></div></section><div class="toolbar"><input class="search" id="quizSearch" placeholder="Cari judul kuis..."><div class="filters"><button class="filter active" data-filter="all">Semua</button><button class="filter" data-filter="open">Sedang dibuka</button><button class="filter" data-filter="closed">Ditutup</button></div></div><section class="grid" id="quizGrid"></section>`;
   const draw = () => { const filter = $('.filter.active')?.dataset.filter || 'all'; const text = $('#quizSearch').value.toLowerCase(); const list = state.quizzes.filter(q => q.title?.toLowerCase().includes(text)).filter(q => filter === 'all' || (filter === 'open' ? quizStatus(q)[1] : !quizStatus(q)[1])); $('#quizGrid').innerHTML = list.length ? list.map(publicQuizCard).join('') : '<div class="empty">Belum ada kuis sesuai pencarian.</div>'; $$('#quizGrid [data-start]').forEach(button => button.onclick = () => startIdentity(button.dataset.start)); };
-  draw();
+   draw();
+  clearTimeout(window.quizStatusRefresh);
+  const refreshStatus = () => { if ($('#quizGrid')) { draw(); window.quizStatusRefresh = setTimeout(refreshStatus, 1000); } };
+  window.quizStatusRefresh = setTimeout(refreshStatus, 1000);
   $('#quizSearch').oninput = draw;
   $$('.filter').forEach(button => button.onclick = () => { $$('.filter').forEach(item => item.classList.remove('active')); button.classList.add('active'); draw(); });
 }
@@ -189,9 +191,29 @@ async function renderSubjects() { const quizzes = await adminData(); const subje
 async function renderSettings() { const snapshot = await getDoc(doc(db, 'settings', 'general')); const settings = { appName: 'KelasKita', schoolName: '', logoUrl: '', classes: [], subjects: [], retakeDefault: false, showScoreDefault: true, ...(snapshot.exists() ? snapshot.data() : {}) }; adminShell('Pengaturan aplikasi', `<form id="settingsForm" class="card form-card"><div class="form-grid"><label>Nama aplikasi<input name="appName" value="${esc(settings.appName)}"></label><label>Nama sekolah<input name="schoolName" value="${esc(settings.schoolName)}"></label><label>URL logo<input name="logoUrl" value="${esc(settings.logoUrl)}"></label><label>Daftar kelas, pisahkan koma<input name="classes" value="${esc((settings.classes || []).join(', '))}"></label><label>Daftar mata pelajaran, pisahkan koma<input name="subjects" value="${esc((settings.subjects || []).join(', '))}"></label></div><div class="check-grid"><label><input name="retakeDefault" type="checkbox" ${settings.retakeDefault ? 'checked' : ''}> Retake default</label><label><input name="showScoreDefault" type="checkbox" ${settings.showScoreDefault ? 'checked' : ''}> Tampilkan nilai default</label></div><button class="button primary">Simpan pengaturan</button></form>`); $('#settingsForm').onsubmit = async event => { event.preventDefault(); const form = new FormData(event.target); await setDoc(doc(db, 'settings', 'general'), { appName: form.get('appName'), schoolName: form.get('schoolName'), logoUrl: form.get('logoUrl'), classes: clean(form.get('classes')).split(',').map(clean).filter(Boolean), subjects: clean(form.get('subjects')).split(',').map(clean).filter(Boolean), retakeDefault: form.get('retakeDefault') === 'on', showScoreDefault: form.get('showScoreDefault') === 'on', updatedAt: serverTimestamp() }); toast('Pengaturan disimpan.'); }; }
 
 let adminLoading = false;
+let adminRealtimeStarted = false;
+let adminRefreshTimer = null;
+const stateAdmin = { page: '' };
+function startAdminRealtime() {
+  if (adminRealtimeStarted) return;
+  adminRealtimeStarted = true;
+  const refresh = () => {
+    clearTimeout(adminRefreshTimer);
+    adminRefreshTimer = setTimeout(() => {
+      if (!state.user || !state.isAdmin || adminLoading) return;
+      if (stateAdmin.page === 'dashboard') renderDashboard();
+      if (stateAdmin.page === 'submissions') renderSubmissions();
+      if (stateAdmin.page === 'subjects') renderSubjects();
+      if (stateAdmin.page === 'quizzes' && $('#adminQuizGrid')) renderQuizList();
+    }, 150);
+  };
+  onSnapshot(collection(db, 'quizzes'), refresh, error => toast(errorMessage(error)));
+  onSnapshot(collection(db, 'submissions'), refresh, error => toast(errorMessage(error)));
+  onSnapshot(doc(db, 'settings', 'general'), refresh, error => toast(errorMessage(error)));
+}
 async function openAdmin(page) { if (!state.user) return $('#adminDialog').showModal(); if (!state.isAdmin) { const profile = state.adminProfile || {}; showError('Akses admin ditolak', `UID login: ${state.user.uid}\nDokumen users/${state.user.uid}: ${profile.exists ? 'ada' : 'tidak ada'}\nRole: ${profile.data?.role || '-'}\nactive: ${String(profile.data?.active)}\nisActive: ${String(profile.data?.isActive)}\n\nBuat atau perbaiki dokumen users/${state.user.uid}.`); return; } if (adminLoading) return; adminLoading = true; try { loading('Memuat dashboard admin...'); if (page === 'dashboard') await firestoreRequest(() => renderDashboard()); if (page === 'quizzes') await firestoreRequest(() => renderQuizList()); if (page === 'submissions') await firestoreRequest(() => renderSubmissions()); if (page === 'subjects') await firestoreRequest(() => renderSubjects()); if (page === 'settings') await firestoreRequest(() => renderSettings()); } catch (error) { showError('CRUD admin gagal', `${errorMessage(error)}\n\nUID login: ${state.user.uid}\n\nCoba refresh halaman sekali.`); } finally { adminLoading = false; } }
 $('#adminForm').onsubmit = async event => { event.preventDefault(); const email = clean($('#adminEmail').value); const password = $('#adminPassword').value; const button = $('#adminSubmit'); $('#adminError').textContent = ''; if (!email || !password) { $('#adminError').textContent = 'Email dan password wajib diisi.'; return; } button.disabled = true; button.textContent = 'Memeriksa...'; try { await signInWithEmailAndPassword(auth, email, password); $('#adminDialog').close(); } catch (error) { $('#adminError').textContent = errorMessage(error); } finally { button.disabled = false; button.textContent = 'Masuk'; } };
-$$('[data-view]').forEach(button => button.onclick = () => button.dataset.view === 'home' ? renderHome() : openAdmin(button.dataset.view === 'results' ? 'submissions' : 'dashboard'));
+$$('[data-view]').forEach(button => button.onclick = () => { const page = button.dataset.view === 'results' ? 'submissions' : 'dashboard'; stateAdmin.page = page; if (button.dataset.view !== 'home') startAdminRealtime(); return button.dataset.view === 'home' ? renderHome() : openAdmin(page); });
 loading();
 const authReady = new Promise(resolve => onAuthStateChanged(auth, resolve));
 withTimeout(authReady).then(async user => { state.user = user; state.isAdmin = false; if (user) { try { state.isAdmin = await withTimeout(verifyAdmin(user)); } catch (error) { toast(errorMessage(error)); } } $('#adminNav').hidden = !user; $('#adminNav').textContent = state.isAdmin ? 'Admin' : 'Admin Login'; $('#userArea').innerHTML = user ? `<span class="user-chip">${esc(user.email)}</span><button class="button ghost" id="logout">Keluar</button>` : '<button class="button secondary" id="loginAdmin">Admin</button>'; if ($('#logout')) $('#logout').onclick = () => signOut(auth); if ($('#loginAdmin')) $('#loginAdmin').onclick = () => $('#adminDialog').showModal(); if (state.isAdmin) openAdmin('dashboard'); else loadPublicQuizzes(); }).catch(error => showError('Firebase belum tersambung', `${errorMessage(error)}\n\nPeriksa internet, Firebase project ID, Firestore Database, dan Firebase API key.`));
