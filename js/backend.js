@@ -53,10 +53,14 @@ submissionDateObserver.observe($('#app'), { childList: true, subtree: true });
 
 const savedTheme = localStorage.getItem('kelaskita-theme');
 if (savedTheme === 'dark') document.documentElement.dataset.theme = 'dark';
-$('#themeToggle').onclick = () => { const dark = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kelaskita-theme', dark ? 'dark' : 'light'); $('#themeToggle').textContent = dark ? '☀' : '☼'; };
-$('#themeToggle').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☼';
-$('#mobileMenu').onclick = () => { $('nav').classList.toggle('menu-open'); $('#mobileMenu').textContent = $('nav').classList.contains('menu-open') ? '×' : '☰'; };
-$$('nav button').forEach(button => button.addEventListener('click', () => { $('nav').classList.remove('menu-open'); $('#mobileMenu').textContent = '☰'; }));
+if ($('#themeToggle')) {
+  $('#themeToggle').onclick = () => { const dark = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kelaskita-theme', dark ? 'dark' : 'light'); $('#themeToggle').textContent = dark ? '☀' : '☼'; };
+  $('#themeToggle').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☼';
+}
+if ($('#mobileMenu')) {
+  $('#mobileMenu').onclick = () => { $('nav').classList.toggle('menu-open'); $('#mobileMenu').textContent = $('nav').classList.contains('menu-open') ? '×' : '☰'; };
+  $$('nav button').forEach(button => button.addEventListener('click', () => { $('nav').classList.remove('menu-open'); $('#mobileMenu').textContent = '☰'; }));
+}
 
 $$('[data-close-dialog]').forEach(button => button.onclick = () => {
   const dialog = document.getElementById(button.dataset.closeDialog);
