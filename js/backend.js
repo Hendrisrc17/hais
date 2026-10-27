@@ -14,6 +14,8 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;
 const now = () => new Date();
 const dateValue = value => value?.toDate ? value.toDate() : value?.seconds ? new Date(value.seconds * 1000) : value ? new Date(value) : null;
 const isoInput = value => { const date = dateValue(value); return date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''; };
+const displayDate = value => { const date = dateValue(value); return date ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(date) : '-'; };
+const displayTime = value => { const date = dateValue(value); return date ? new Intl.DateTimeFormat('id-ID', { timeStyle: 'medium', hour12: false }).format(date) : '-'; };
 const clean = value => String(value || '').trim().replace(/\s+/g, ' ');
 const money = value => new Intl.NumberFormat('id-ID').format(Number(value || 0));
 const optionPoints = option => Math.max(0, Number(option?.points ?? option?.point ?? option?.score ?? 0) || 0);
@@ -22,6 +24,39 @@ const isCorrectOption = option => option?.isCorrect === true || option?.correct 
 const questionMaxPoints = question => { const options = question.options || []; if (question.type === 'allCorrect') return options.filter(isCorrectOption).reduce((sum, option) => sum + normalizedOptionPoints(option, true), 0); return Math.max(0, ...options.filter(isCorrectOption).map(option => normalizedOptionPoints(option, true))); };
 const toast = message => { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); };
 const state = { user: null, isAdmin: false, quizzes: [], questions: [], submissions: [], currentQuiz: null, search: '' };
+
+const submissionDateObserver = new MutationObserver(() => {
+  const table = $('.table');
+  if (!table || table.dataset.dateColumns) return;
+  const header = $('thead tr', table);
+  if (!header || !header.textContent.includes('Nama')) return;
+  const dateHeader = document.createElement('th');
+  dateHeader.textContent = 'Tanggal masuk';
+  const timeHeader = document.createElement('th');
+  timeHeader.textContent = 'Jam masuk';
+  header.children[4].before(dateHeader, timeHeader);
+  table.dataset.dateColumns = 'true';
+  const updateRows = () => $$('tbody tr', table).forEach(row => {
+    if (row.children.length !== 9) return;
+    const item = state.submissions.find(submission => submission.id === row.querySelector('[data-delete-submission]')?.dataset.deleteSubmission);
+    if (!item) return;
+    const dateCell = document.createElement('td');
+    dateCell.textContent = displayDate(item.submittedAt);
+    const timeCell = document.createElement('td');
+    timeCell.textContent = displayTime(item.submittedAt);
+    row.children[4].before(dateCell, timeCell);
+  });
+  updateRows();
+  new MutationObserver(updateRows).observe($('tbody', table), { childList: true });
+});
+submissionDateObserver.observe($('#app'), { childList: true, subtree: true });
+
+const savedTheme = localStorage.getItem('kelaskita-theme');
+if (savedTheme === 'dark') document.documentElement.dataset.theme = 'dark';
+$('#themeToggle').onclick = () => { const dark = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kelaskita-theme', dark ? 'dark' : 'light'); $('#themeToggle').textContent = dark ? '☀' : '☼'; };
+$('#themeToggle').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☼';
+$('#mobileMenu').onclick = () => { $('nav').classList.toggle('menu-open'); $('#mobileMenu').textContent = $('nav').classList.contains('menu-open') ? '×' : '☰'; };
+$$('nav button').forEach(button => button.addEventListener('click', () => { $('nav').classList.remove('menu-open'); $('#mobileMenu').textContent = '☰'; }));
 
 $$('[data-close-dialog]').forEach(button => button.onclick = () => {
   const dialog = document.getElementById(button.dataset.closeDialog);

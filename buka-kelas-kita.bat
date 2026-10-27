@@ -1,21 +1,22 @@
 @echo off
-title KelasKita
+title KelasKita Server
 cd /d "%~dp0"
-where py >nul 2>nul
-if %errorlevel%==0 goto start
-where python >nul 2>nul
-if %errorlevel%==0 goto startpython
-echo Python tidak ditemukan.
-echo Install Python dari https://www.python.org/downloads/
-pause
-exit /b 1
-:start
-start "KelasKita Server" cmd /k "cd /d "%~dp0" && py -m http.server 5500"
+set "PORT=5500"
+
+where node >nul 2>nul
+if errorlevel 1 (
+  echo Node.js tidak ditemukan.
+  echo Install Node.js dari https://nodejs.org/
+  pause
+  exit /b 1
+)
+
+netstat -ano | findstr ":%PORT%" >nul
+if not errorlevel 1 goto open
+
+start "KelasKita Server" /D "%~dp0" cmd /k node server.js
 timeout /t 2 /nobreak >nul
-start "KelasKita Browser" http://localhost:5500/index.html
-exit /b
-:startpython
-start "KelasKita Server" cmd /k "cd /d "%~dp0" && python -m http.server 5500"
-timeout /t 2 /nobreak >nul
-start "KelasKita Browser" http://localhost:5500/index.html
-exit /b
+
+:open
+start "KelasKita Browser" http://localhost:%PORT%/index.html
+exit /b 0

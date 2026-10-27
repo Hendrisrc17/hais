@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/admin.css">
   <link rel="stylesheet" href="css/layout-fixes.css">
+  <link rel="stylesheet" href="css/modern.css">
 </head>
 <body>
   <header class="topbar"><a class="brand" href="#">Kelas<span>Kita</span></a><nav><button data-view="home">Kuis</button><button data-view="results">Rekap</button><button data-view="admin" id="adminNav" hidden>Admin</button></nav><div id="userArea"></div></header>
@@ -18,7 +19,7 @@
   <dialog id="adminDialog"><form method="post" id="adminForm"><span class="eyebrow">AREA ADMIN</span><h2>Masuk admin</h2><p>Gunakan akun Firebase Authentication.</p><label>Email<input id="adminEmail" type="email" required></label><label>Password<input id="adminPassword" type="password" required minlength="6"></label><div id="adminError" class="error"></div><div class="dialog-actions"><button type="button" class="button ghost" data-close-dialog="adminDialog">Batal</button><button type="submit" id="adminSubmit" class="button primary">Masuk</button></div></form></dialog>
   <script>
     if (location.protocol === 'file:') {
-      document.querySelector('#app').innerHTML = '<section class="card error-state"><span class="eyebrow">MODE FILE</span><h2>Aplikasi perlu dibuka lewat server lokal</h2><p>Jangan buka index.html langsung dari folder. Browser memblokir Firebase pada alamat file://.</p><p>Buka file <b>buka-kelas-kita.bat</b> di folder project, lalu buka alamat yang tampil.</p></section>';
+      document.querySelector('#app').innerHTML = '<section class="card error-state"><span class="eyebrow">MODE FILE</span><h2>Aplikasi perlu dibuka lewat server lokal</h2><p>Jangan buka index.html langsung dari folder. Browser memblokir Firebase pada alamat file://.</p><p>Jalankan <b>buka-kelas-kita.bat</b> di folder project, lalu buka aplikasi lewat alamat lokal:</p><p><a class="button primary" href="http://localhost:5500/index.html">Buka KelasKita lokal</a></p></section>';
     }
   </script>
   <script>
