@@ -25,34 +25,40 @@ const questionMaxPoints = question => { const options = question.options || []; 
 const toast = message => { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); };
 const state = { user: null, isAdmin: false, quizzes: [], questions: [], submissions: [], currentQuiz: null, search: '' };
 
-const submissionDateObserver = new MutationObserver(() => {
-  const table = $('.table');
-  if (!table || table.dataset.dateColumns) return;
-  const header = $('thead tr', table);
-  if (!header || !header.textContent.includes('Nama')) return;
-  const dateHeader = document.createElement('th');
-  dateHeader.textContent = 'Tanggal masuk';
-  const timeHeader = document.createElement('th');
-  timeHeader.textContent = 'Jam masuk';
-  header.children[4].before(dateHeader, timeHeader);
-  table.dataset.dateColumns = 'true';
-  const updateRows = () => $$('tbody tr', table).forEach(row => {
-    if (row.children.length !== 9) return;
-    const item = state.submissions.find(submission => submission.id === row.querySelector('[data-delete-submission]')?.dataset.deleteSubmission);
-    if (!item) return;
-    const dateCell = document.createElement('td');
-    dateCell.textContent = displayDate(item.submittedAt);
-    const timeCell = document.createElement('td');
-    timeCell.textContent = displayTime(item.submittedAt);
-    row.children[4].before(dateCell, timeCell);
-  });
-  updateRows();
-  new MutationObserver(updateRows).observe($('tbody', table), { childList: true });
-});
-submissionDateObserver.observe($('#app'), { childList: true, subtree: true });
-
 const savedTheme = localStorage.getItem('kelaskita-theme');
 if (savedTheme === 'dark') document.documentElement.dataset.theme = 'dark';
+
+const submissionTableObserver = new MutationObserver(() => {
+  const table = $('.table');
+  if (!table || !$('tbody', table)) return;
+  const header = $('thead tr', table);
+  if (header && !header.querySelector('[data-submission-date]')) {
+    const dateHeader = document.createElement('th');
+    dateHeader.dataset.submissionDate = 'true';
+    dateHeader.textContent = 'Tanggal masuk';
+    const timeHeader = document.createElement('th');
+    timeHeader.dataset.submissionDate = 'true';
+    timeHeader.textContent = 'Jam masuk';
+    header.children[4]?.before(dateHeader, timeHeader);
+  }
+  $$('tbody tr', table).forEach(row => {
+    if (row.querySelector('[data-submission-date]')) return;
+    const item = state.submissions.find(submission =>
+      String(submission.studentName || '') === row.children[0]?.textContent
+      && String(submission.quizTitle || '') === row.children[3]?.textContent
+    );
+    if (!item) return;
+    const dateCell = document.createElement('td');
+    dateCell.dataset.submissionDate = 'true';
+    dateCell.textContent = displayDate(item.submittedAt);
+    const timeCell = document.createElement('td');
+    timeCell.dataset.submissionDate = 'true';
+    timeCell.textContent = displayTime(item.submittedAt);
+    row.children[4]?.before(dateCell, timeCell);
+  });
+});
+submissionTableObserver.observe($('#app'), { childList: true, subtree: true });
+
 if ($('#themeToggle')) {
   $('#themeToggle').onclick = () => { const dark = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kelaskita-theme', dark ? 'dark' : 'light'); $('#themeToggle').textContent = dark ? '☀' : '☼'; };
   $('#themeToggle').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☼';
