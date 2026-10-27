@@ -28,43 +28,6 @@ const state = { user: null, isAdmin: false, quizzes: [], questions: [], submissi
 const savedTheme = localStorage.getItem('kelaskita-theme');
 if (savedTheme === 'dark') document.documentElement.dataset.theme = 'dark';
 
-const submissionTableObserver = new MutationObserver(() => {
-  state.submissions.sort((a, b) => (dateValue(b.submittedAt)?.getTime() || 0) - (dateValue(a.submittedAt)?.getTime() || 0));
-  const table = $('.table');
-  if (!table || !$('tbody', table)) return;
-  const body = $('tbody', table);
-  state.submissions.forEach(item => {
-    const row = [...body.children].find(candidate => candidate.children[0]?.textContent === String(item.studentName || '') && candidate.children[3]?.textContent === String(item.quizTitle || ''));
-    if (row) body.append(row);
-  });
-  const header = $('thead tr', table);
-  if (header && !header.querySelector('[data-submission-date]')) {
-    const dateHeader = document.createElement('th');
-    dateHeader.dataset.submissionDate = 'true';
-    dateHeader.textContent = 'Tanggal masuk';
-    const timeHeader = document.createElement('th');
-    timeHeader.dataset.submissionDate = 'true';
-    timeHeader.textContent = 'Jam masuk';
-    header.children[4]?.before(dateHeader, timeHeader);
-  }
-  $$('tbody tr', table).forEach(row => {
-    if (row.querySelector('[data-submission-date]')) return;
-    const item = state.submissions.find(submission =>
-      String(submission.studentName || '') === row.children[0]?.textContent
-      && String(submission.quizTitle || '') === row.children[3]?.textContent
-    );
-    if (!item) return;
-    const dateCell = document.createElement('td');
-    dateCell.dataset.submissionDate = 'true';
-    dateCell.textContent = displayDate(item.submittedAt);
-    const timeCell = document.createElement('td');
-    timeCell.dataset.submissionDate = 'true';
-    timeCell.textContent = displayTime(item.submittedAt);
-    row.children[4]?.before(dateCell, timeCell);
-  });
-});
-submissionTableObserver.observe($('#app'), { childList: true, subtree: true });
-
 if ($('#themeToggle')) {
   $('#themeToggle').onclick = () => { const dark = document.documentElement.dataset.theme !== 'dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kelaskita-theme', dark ? 'dark' : 'light'); $('#themeToggle').textContent = dark ? '☀' : '☼'; };
   $('#themeToggle').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☼';
@@ -202,11 +165,11 @@ async function renderSubmissionsFast(subject = '') {
     };
   }).filter(item => !subject || item.subject === subject)
     .sort((a, b) => (dateValue(b.submittedAt)?.getTime() || 0) - (dateValue(a.submittedAt)?.getTime() || 0));
-  adminShell(subject ? `Hasil ${subject}` : 'Rekap submission', `<div class="toolbar"><input class="search" id="submissionSearch" placeholder="Cari nama, mapel, atau kuis..."><button class="button secondary" id="downloadCsv">Download CSV</button><button class="button secondary" id="downloadExcel">Export Excel</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Kuis</th><th>Nilai</th><th>Benar</th><th>Salah</th><th>Kosong</th><th>Aksi</th></tr></thead><tbody id="submissionRows"></tbody></table></div>`);
+  adminShell(subject ? `Hasil ${subject}` : 'Rekap submission', `<div class="toolbar"><input class="search" id="submissionSearch" placeholder="Cari nama, mapel, atau kuis..."><button class="button secondary" id="downloadCsv">Download CSV</button><button class="button secondary" id="downloadExcel">Export Excel</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Nama</th><th>Kelas</th><th>Mapel</th><th>Kuis</th><th>Tanggal masuk</th><th>Jam masuk</th><th>Nilai</th><th>Benar</th><th>Salah</th><th>Kosong</th><th>Aksi</th></tr></thead><tbody id="submissionRows"></tbody></table></div>`);
   const draw = () => {
     const text = $('#submissionSearch').value.toLowerCase();
     const rows = state.submissions.filter(item => [item.studentName, item.subject, item.quizTitle].join(' ').toLowerCase().includes(text));
-    $('#submissionRows').innerHTML = rows.map(item => `<tr><td>${esc(item.studentName)}</td><td>${esc(item.studentClass)}</td><td>${esc(item.subject)}</td><td>${esc(item.quizTitle)}</td><td>${item.score}/${item.total}</td><td>${item.correct}</td><td>${item.wrong}</td><td>${item.unanswered}</td><td><button class="button danger" data-delete-submission="${item.id}">Hapus</button></td></tr>`).join('') || '<tr><td colspan="9" class="empty">Belum ada submission.</td></tr>';
+    $('#submissionRows').innerHTML = rows.map(item => `<tr><td>${esc(item.studentName)}</td><td>${esc(item.studentClass)}</td><td>${esc(item.subject)}</td><td>${esc(item.quizTitle)}</td><td>${displayDate(item.submittedAt)}</td><td>${displayTime(item.submittedAt)}</td><td>${item.score}/${item.total}</td><td>${item.correct}</td><td>${item.wrong}</td><td>${item.unanswered}</td><td><button class="button danger" data-delete-submission="${item.id}">Hapus</button></td></tr>`).join('') || '<tr><td colspan="11" class="empty">Belum ada submission.</td></tr>';
     $$('[data-delete-submission]').forEach(button => button.onclick = () => deleteSubmission(button.dataset.deleteSubmission));
   };
   draw();
